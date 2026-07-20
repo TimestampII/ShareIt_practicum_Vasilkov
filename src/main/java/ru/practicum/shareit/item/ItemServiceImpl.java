@@ -20,7 +20,17 @@ public class ItemServiceImpl implements ItemService {
     @Override
     public ItemDto create(Long ownerId, ItemDto itemDto) {
         User owner = getUserOrThrow(ownerId);
-        validateForCreate(itemDto);
+
+        if (itemDto.getName() == null || itemDto.getName().isBlank()) {
+            throw new ValidationException("Название вещи не может быть пустым");
+        }
+        if (itemDto.getDescription() == null || itemDto.getDescription().isBlank()) {
+            throw new ValidationException("Описание вещи не может быть пустым");
+        }
+        if (itemDto.getAvailable() == null) {
+            throw new ValidationException("Статус доступности вещи должен быть указан");
+        }
+
         Item item = ItemMapper.toItem(itemDto, owner);
         Item saved = itemRepository.save(item);
         return ItemMapper.toItemDto(saved);
@@ -74,17 +84,5 @@ public class ItemServiceImpl implements ItemService {
     private Item getItemOrThrow(Long itemId) {
         return itemRepository.findById(itemId)
                 .orElseThrow(() -> new NotFoundException("Вещь с id " + itemId + " не найдена"));
-    }
-
-    private void validateForCreate(ItemDto itemDto) {
-        if (itemDto.getName() == null || itemDto.getName().isBlank()) {
-            throw new ValidationException("Название вещи не может быть пустым");
-        }
-        if (itemDto.getDescription() == null || itemDto.getDescription().isBlank()) {
-            throw new ValidationException("Описание вещи не может быть пустым");
-        }
-        if (itemDto.getAvailable() == null) {
-            throw new ValidationException("Статус доступности вещи должен быть указан");
-        }
     }
 }
