@@ -1,16 +1,20 @@
 package ru.practicum.shareit.item;
 
-import java.util.List;
-import java.util.Optional;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
-public interface ItemRepository {
+import java.util.List;
+
+public interface ItemRepository extends JpaRepository<Item, Long> {
+
     List<Item> findAllByOwnerId(Long ownerId);
 
-    Optional<Item> findById(Long id);
-
-    Item save(Item item);
-
-    Item update(Item item);
-
-    List<Item> search(String text);
+    // Запросный метод не подходит: нужно искать по двум полям через "или",
+    // без учёта регистра, поэтому запрос описан вручную через JPQL
+    @Query("select i from Item i " +
+            "where i.available = true " +
+            "and (upper(i.name) like upper(concat('%', :text, '%')) " +
+            "or upper(i.description) like upper(concat('%', :text, '%')))")
+    List<Item> search(@Param("text") String text);
 }

@@ -37,7 +37,7 @@ public class UserServiceImpl implements UserService {
         if (userDto.getName() != null && !userDto.getName().isBlank()) {
             existing.setName(userDto.getName());
         }
-        User updated = userRepository.update(existing);
+        User updated = userRepository.save(existing);
         return UserMapper.toUserDto(updated);
     }
 
@@ -73,7 +73,10 @@ public class UserServiceImpl implements UserService {
         if (!EMAIL_PATTERN.matcher(email).matches()) {
             throw new ValidationException("Email имеет некорректный формат: " + email);
         }
-        if (userRepository.existsByEmail(email, excludeUserId)) {
+        boolean emailTaken = excludeUserId == null
+                ? userRepository.existsByEmail(email)
+                : userRepository.existsByEmailAndIdNot(email, excludeUserId);
+        if (emailTaken) {
             throw new DuplicateEmailException("Пользователь с email " + email + " уже существует");
         }
     }
