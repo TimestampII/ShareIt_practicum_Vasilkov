@@ -11,10 +11,13 @@ import ru.practicum.shareit.item.Item;
 import ru.practicum.shareit.item.ItemRepository;
 import ru.practicum.shareit.user.User;
 import ru.practicum.shareit.user.UserRepository;
+import jakarta.annotation.PostConstruct;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
+
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +25,47 @@ public class BookingServiceImpl implements BookingService {
     private final BookingRepository bookingRepository;
     private final ItemRepository itemRepository;
     private final UserRepository userRepository;
+    private Map<BookingState, BookingStateFetchStrategy> bookerStrategies;
+    private Map<BookingState, BookingStateFetchStrategy> ownerStrategies;
+
+    @PostConstruct
+    private void initStrategies() {
+        bookerStrategies = Map.of(
+                BookingState.ALL,
+                (bookerId, now) -> bookingRepository.findByBooker_IdOrderByStartDesc(bookerId),
+                BookingState.CURRENT,
+                (bookerId, now) -> bookingRepository
+                        .findByBooker_IdAndStartBeforeAndEndAfterOrderByStartDesc(bookerId, now, now),
+                BookingState.PAST,
+                (bookerId, now) -> bookingRepository.findByBooker_IdAndEndBeforeOrderByStartDesc(bookerId, now),
+                BookingState.FUTURE,
+                (bookerId, now) -> bookingRepository.findByBooker_IdAndStartAfterOrderByStartDesc(bookerId, now),
+                BookingState.WAITING,
+                (bookerId, now) -> bookingRepository
+                        .findByBooker_IdAndStatusOrderByStartDesc(bookerId, BookingStatus.WAITING),
+                BookingState.REJECTED,
+                (bookerId, now) -> bookingRepository
+                        .findByBooker_IdAndStatusOrderByStartDesc(bookerId, BookingStatus.REJECTED)
+        );
+
+        ownerStrategies = Map.of(
+                BookingState.ALL,
+                (ownerId, now) -> bookingRepository.findByItem_Owner_IdOrderByStartDesc(ownerId),
+                BookingState.CURRENT,
+                (ownerId, now) -> bookingRepository
+                        .findByItem_Owner_IdAndStartBeforeAndEndAfterOrderByStartDesc(ownerId, now, now),
+                BookingState.PAST,
+                (ownerId, now) -> bookingRepository.findByItem_Owner_IdAndEndBeforeOrderByStartDesc(ownerId, now),
+                BookingState.FUTURE,
+                (ownerId, now) -> bookingRepository.findByItem_Owner_IdAndStartAfterOrderByStartDesc(ownerId, now),
+                BookingState.WAITING,
+                (ownerId, now) -> bookingRepository
+                        .findByItem_Owner_IdAndStatusOrderByStartDesc(ownerId, BookingStatus.WAITING),
+                BookingState.REJECTED,
+                (ownerId, now) -> bookingRepository
+                        .findByItem_Owner_IdAndStatusOrderByStartDesc(ownerId, BookingStatus.REJECTED)
+        );
+    }
 
     @Override
     public BookingResponseDto create(Long bookerId, NewBookingDto newBookingDto) {
@@ -81,40 +125,14 @@ public class BookingServiceImpl implements BookingService {
     @Override
     public List<BookingResponseDto> getAllByBooker(Long bookerId, BookingState state) {
         getUserOrThrow(bookerId);
-        LocalDateTime now = LocalDateTime.now();
-
-        List<Booking> bookings = switch (state) {
-            case ALL -> bookingRepository.findByBooker_IdOrderByStartDesc(bookerId);
-            case CURRENT -> bookingRepository
-                    .findByBooker_IdAndStartBeforeAndEndAfterOrderByStartDesc(bookerId, now, now);
-            case PAST -> bookingRepository.findByBooker_IdAndEndBeforeOrderByStartDesc(bookerId, now);
-            case FUTURE -> bookingRepository.findByBooker_IdAndStartAfterOrderByStartDesc(bookerId, now);
-            case WAITING -> bookingRepository
-                    .findByBooker_IdAndStatusOrderByStartDesc(bookerId, BookingStatus.WAITING);
-            case REJECTED -> bookingRepository
-                    .findByBooker_IdAndStatusOrderByStartDesc(bookerId, BookingStatus.REJECTED);
-        };
-
+        List<Booking> bookings = bookerStrategies.get(state).fetch(bookerId, LocalDateTime.now());
         return bookings.stream().map(BookingMapper::toBookingResponseDto).collect(Collectors.toList());
     }
 
     @Override
     public List<BookingResponseDto> getAllByOwner(Long ownerId, BookingState state) {
         getUserOrThrow(ownerId);
-        LocalDateTime now = LocalDateTime.now();
-
-        List<Booking> bookings = switch (state) {
-            case ALL -> bookingRepository.findByItem_Owner_IdOrderByStartDesc(ownerId);
-            case CURRENT -> bookingRepository
-                    .findByItem_Owner_IdAndStartBeforeAndEndAfterOrderByStartDesc(ownerId, now, now);
-            case PAST -> bookingRepository.findByItem_Owner_IdAndEndBeforeOrderByStartDesc(ownerId, now);
-            case FUTURE -> bookingRepository.findByItem_Owner_IdAndStartAfterOrderByStartDesc(ownerId, now);
-            case WAITING -> bookingRepository
-                    .findByItem_Owner_IdAndStatusOrderByStartDesc(ownerId, BookingStatus.WAITING);
-            case REJECTED -> bookingRepository
-                    .findByItem_Owner_IdAndStatusOrderByStartDesc(ownerId, BookingStatus.REJECTED);
-        };
-
+        List<Booking> bookings = ownerStrategies.get(state).fetch(ownerId, LocalDateTime.now());
         return bookings.stream().map(BookingMapper::toBookingResponseDto).collect(Collectors.toList());
     }
 
